@@ -1,0 +1,76 @@
+const jwt = require('jsonwebtoken');
+
+let authenticate = (request , response , next) => {
+    // get token from header
+    const token = request.header('x-auth-token');
+    if(!token){
+        return response.status(401).json({msg : 'No Token , authorization denied'});
+    }
+
+    // verify the token
+    try {
+        let decoded = jwt.verify(token , process.env.JWT_SECRET_KEY);
+        request.user = decoded.user;
+        next();
+    }
+    catch (error) {
+        response.status(401).json({msg : 'Token is not valid'});
+    }
+};
+module.exports = authenticate;
+
+
+
+/*
+    @usage : Login a User
+    @url : /api/users/login
+    @fields : email , password
+    @method : POST
+    @access : PUBLIC
+ */
+router.post('/login' , [
+    body('email').notEmpty().withMessage('Email is Required'),
+    body('password').notEmpty().withMessage('Password is Required'),
+], async (request , response) => {
+    let errors = validationResult(request);
+    if(!errors.isEmpty()){
+        return response.status(401).json({errors : errors.array()})
+    }
+    try {
+        let {email , password} = request.body;
+        let user = await User.findOne({email : email});
+        if(!user){
+            return response.status(401).json({errors : [{msg : 'Invalid Credentials'}]})
+        }
+        // check password
+        let isMatch = await bcrypt.compare(password , user.password);
+        if(!isMatch){
+            return response.status(401).json({errors : [{msg : 'Invalid Credentials'}]})
+        }
+
+        // create a token
+        let payload = {
+            user : {
+                id : user.id,
+                name : user.name
+            }
+        };
+        jwt.sign(payload , process.env.JWT_SECRET_KEY , {expiresIn: 360000000} , (err , token) => {
+            if(err) throw err;
+            response.status(200).json({
+                msg : 'Login is Success',
+                token : token
+            });
+        })
+    }
+    catch (error) {
+        console.error(error);
+        response.status(500).json({errors : [{msg : error.message}]});
+    }
+});
+
+
+
+
+
+
